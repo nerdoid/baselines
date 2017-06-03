@@ -126,7 +126,7 @@ def build_act(make_obs_ph, q_func, num_actions, scope="deepq", reuse=None):
         return act
 
 
-def build_train(make_obs_ph, q_func, num_actions, optimizer, grad_norm_clipping=None, gamma=1.0, double_q=True, scope="deepq", reuse=None):
+def build_train(make_obs_ph, q_func, inv_act_func, num_actions, optimizer, grad_norm_clipping=None, gamma=1.0, double_q=True, scope="deepq", reuse=None):
     """Creates the act function:
 
     Parameters
@@ -143,6 +143,14 @@ def build_train(make_obs_ph, q_func, num_actions, optimizer, grad_norm_clipping=
             reuse: bool
                 should be passed to outer variable scope
         and returns a tensor of shape (batch_size, num_actions) with values of every action.
+    inv_act_func: (int, tf.Variable, tf.Variable) -> tf.Variable
+        a model generator that takes the following inputs:
+            num_actions: int
+                number of actions
+            s_t: object
+                the output of the placeholder for observation at t
+            s_tp1: object
+                the output of the placehonder for observation at t+1
     num_actions: int
         number of actions
     reuse: bool
@@ -213,6 +221,23 @@ def build_train(make_obs_ph, q_func, num_actions, optimizer, grad_norm_clipping=
         td_error = q_t_selected - tf.stop_gradient(q_t_selected_target)
         errors = U.huber_loss(td_error)
         weighted_error = tf.reduce_mean(importance_weights_ph * errors)
+
+        if inv_act_func:
+            inverse_action, phi_t, phi_tp1 = inv_act_func(
+                num_actions, obs_t_input.get(), obs_tp1_input.get()
+            )
+            log_prob_inverse_action = tf.nn.log_softmax(inverse_action)
+            inverse_action_loss = - tf.reduce_sum(
+                tf.reduce_sum(
+                    log_prob_inverse_action * tf.one_hot(act_t_ph, num_actions),
+                    [1]
+                )
+            )
+
+            error = weighted_error + 0.8 * inverse_action_loss
+        else:
+            error = weighted_error
+
         # compute optimization op (potentially with gradient clipping)
         if grad_norm_clipping is not None:
             optimize_expr = U.minimize_and_clip(optimizer,

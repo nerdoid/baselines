@@ -80,3 +80,56 @@ def cnn_to_mlp(convs, hiddens, dueling=False):
 
     return lambda *args, **kwargs: _cnn_to_mlp(convs, hiddens, dueling, *args, **kwargs)
 
+
+def _state_to_phi(state, reuse=None):
+    """Builds shared convolutional layers to process states into intermediate
+    representations for inverse action prediction.
+    """
+    with tf.variable_scope('phi', reuse=reuse) as scope:
+        out = state
+        for i in range(4):
+            out = layers.convolution2d(
+                out,
+                num_outputs=32,
+                kernel_size=[3, 3],
+                stride=2,
+                activation_fn=tf.nn.relu
+            )
+
+        return layers.flatten(out)
+
+
+def _states_to_action(hidden_size, num_actions, s_t, s_tp1):
+    phi_t = _state_to_phi(s_t)
+    phi_tp1 = _state_to_phi(s_tp1, reuse=True)
+
+    phies = tf.concat([phi_t, phi_tp1], 1)
+    phies = layers.flatten(phies)
+
+    inverse_hidden = layers.fully_connected(
+        phies, num_outputs=hidden_size, activation_fn=tf.nn.relu
+    )
+    inverse_out = layers.fully_connected(
+        inverse_hidden, num_outputs=num_actions
+    )
+
+    return (inverse_out, phi_t, phi_tp1)
+
+
+def states_to_action(hidden_size):
+    """This model takes as input two consecutive observations and returns
+    the action that was likely executed to arrive at the second observation.
+
+    Parameters
+    ----------
+    hidden_size: int
+        size of the hidden layer
+
+    Returns
+    -------
+    inv_act_func: function
+        function that returns one-hot prediction op for the action just
+        executed.
+    """
+
+    return lambda *args, **kwargs: _states_to_action(hidden_size, *args, **kwargs)

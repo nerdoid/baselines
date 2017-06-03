@@ -76,6 +76,7 @@ def load(path, num_cpu=16):
 
 def learn(env,
           q_func,
+          inv_act_func=None,
           lr=5e-4,
           max_timesteps=100000,
           buffer_size=50000,
@@ -111,6 +112,14 @@ def learn(env,
             reuse: bool
                 should be passed to outer variable scope
         and returns a tensor of shape (batch_size, num_actions) with values of every action.
+    inv_act_func: (int, tf.Variable, tf.Variable) -> tf.Variable
+        a model generator that takes the following inputs:
+            num_actions: int
+                number of actions
+            s_t: object
+                the output of the placeholder for observation at t
+            s_tp1: object
+                the output of the placehonder for observation at t+1
     lr: float
         learning rate for adam optimizer
     max_timesteps: int
@@ -172,6 +181,7 @@ def learn(env,
     act, train, update_target, debug = deepq.build_train(
         make_obs_ph=make_obs_ph,
         q_func=q_func,
+        inv_act_func=inv_act_func,
         num_actions=env.action_space.n,
         optimizer=tf.train.AdamOptimizer(learning_rate=lr),
         gamma=gamma,
