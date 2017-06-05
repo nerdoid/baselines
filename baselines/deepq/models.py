@@ -93,7 +93,7 @@ def _state_to_phi(state, reuse=None):
                 num_outputs=32,
                 kernel_size=[3, 3],
                 stride=2,
-                activation_fn=tf.nn.relu
+                activation_fn=tf.nn.elu
             )
 
         return layers.flatten(out)
@@ -107,7 +107,7 @@ def _states_to_action(hidden_size, num_actions, s_t, s_tp1):
     phies = layers.flatten(phies)
 
     inverse_hidden = layers.fully_connected(
-        phies, num_outputs=hidden_size, activation_fn=tf.nn.relu
+        phies, num_outputs=hidden_size, activation_fn=tf.nn.elu
     )
     inverse_out = layers.fully_connected(
         inverse_hidden, num_outputs=num_actions
