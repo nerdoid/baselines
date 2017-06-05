@@ -15,11 +15,15 @@ def main():
     inv_act_model = deepq.models.states_to_action(
         hidden_size=256
     )
+    phi_tp1_loss_model = deepq.models.state_action_to_phi_tp1_loss(
+        hidden_size=256, output_size=288
+    )
 
     act = deepq.learn(
         env,
         q_func=model,
         inv_act_func=inv_act_model,
+        phi_tp1_loss_func=phi_tp1_loss_model,
         lr=1e-4,
         max_timesteps=2000000,
         buffer_size=10000,

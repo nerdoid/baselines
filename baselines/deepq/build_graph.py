@@ -112,21 +112,42 @@ def build_act(make_obs_ph, q_func, num_actions, scope="deepq", reuse=None):
         deterministic_actions = tf.argmax(q_values, axis=1)
 
         batch_size = tf.shape(observations_ph.get())[0]
-        random_actions = tf.random_uniform(tf.stack([batch_size]), minval=0, maxval=num_actions, dtype=tf.int64)
-        chose_random = tf.random_uniform(tf.stack([batch_size]), minval=0, maxval=1, dtype=tf.float32) < eps
-        stochastic_actions = tf.where(chose_random, random_actions, deterministic_actions)
+        random_actions = tf.random_uniform(
+            tf.stack([batch_size]),
+            minval=0,
+            maxval=num_actions,
+            dtype=tf.int64
+        )
+        chose_random = tf.random_uniform(
+            tf.stack([batch_size]),
+            minval=0,
+            maxval=1,
+            dtype=tf.float32
+        ) < eps
+        stochastic_actions = tf.where(
+            chose_random, random_actions, deterministic_actions
+        )
 
-        output_actions = tf.cond(stochastic_ph, lambda: stochastic_actions, lambda: deterministic_actions)
-        update_eps_expr = eps.assign(tf.cond(update_eps_ph >= 0, lambda: update_eps_ph, lambda: eps))
+        output_actions = tf.cond(
+            stochastic_ph,
+            lambda: stochastic_actions,
+            lambda: deterministic_actions
+        )
+        update_eps_expr = eps.assign(
+            tf.cond(update_eps_ph >= 0, lambda: update_eps_ph, lambda: eps)
+        )
 
         act = U.function(inputs=[observations_ph, stochastic_ph, update_eps_ph],
                          outputs=output_actions,
                          givens={update_eps_ph: -1.0, stochastic_ph: True},
                          updates=[update_eps_expr])
+
         return act
 
 
-def build_train(make_obs_ph, q_func, inv_act_func, num_actions, optimizer, grad_norm_clipping=None, gamma=1.0, double_q=True, scope="deepq", reuse=None):
+def build_train(make_obs_ph, q_func, inv_act_func, phi_tp1_loss_func,
+                num_actions, optimizer, grad_norm_clipping=None, gamma=1.0,
+                double_q=True, scope="deepq", reuse=None):
     """Creates the act function:
 
     Parameters
@@ -151,6 +172,12 @@ def build_train(make_obs_ph, q_func, inv_act_func, num_actions, optimizer, grad_
                 the output of the placeholder for observation at t
             s_tp1: object
                 the output of the placehonder for observation at t+1
+    phi_tp1_loss_func: (tf.Variable, tf.Variable) -> tf.Variable
+        a model generator that takes the following inputs:
+            s_t: object
+                the output of the placeholder for observation at t
+            a_t: object
+                the output of the placeholder for action at t
     num_actions: int
         number of actions
     reuse: bool
@@ -222,19 +249,25 @@ def build_train(make_obs_ph, q_func, inv_act_func, num_actions, optimizer, grad_
         errors = U.huber_loss(td_error)
         weighted_error = tf.reduce_mean(importance_weights_ph * errors)
 
-        if inv_act_func:
+        if inv_act_func and phi_tp1_loss_func:
+            # Inverse
             inverse_action, phi_t, phi_tp1 = inv_act_func(
                 num_actions, obs_t_input.get(), obs_tp1_input.get()
             )
             log_prob_inverse_action = tf.nn.log_softmax(inverse_action)
+            one_hot_actions = tf.one_hot(act_t_ph, num_actions)
             inverse_action_loss = - tf.reduce_sum(
                 tf.reduce_sum(
-                    log_prob_inverse_action * tf.one_hot(act_t_ph, num_actions),
+                    log_prob_inverse_action * one_hot_actions,
                     [1]
                 )
             )
 
-            error = weighted_error + 0.8 * inverse_action_loss
+            # Forward
+            phi_tp1_loss = phi_tp1_loss_func(phi_t, phi_tp1, one_hot_actions)
+            intrinsic_reward = 0.001 * phi_tp1_loss
+
+            error = weighted_error + 0.8 * inverse_action_loss + 0.2 * phi_tp1_loss
         else:
             error = weighted_error
 
@@ -269,6 +302,15 @@ def build_train(make_obs_ph, q_func, inv_act_func, num_actions, optimizer, grad_
         )
         update_target = U.function([], [], updates=[update_target_expr])
 
+        int_rew_f = U.function(
+            inputs=[
+                obs_t_input,
+                obs_tp1_input,
+                act_t_ph
+            ],
+            outputs=intrinsic_reward
+        )
+
         q_values = U.function([obs_t_input], q_t)
 
-        return act_f, train, update_target, {'q_values': q_values}
+        return act_f, int_rew_f, train, update_target, {'q_values': q_values}

@@ -87,7 +87,7 @@ def _state_to_phi(state, reuse=None):
     """
     with tf.variable_scope('phi', reuse=reuse) as scope:
         out = state
-        for i in range(4):
+        for i in range(5):
             out = layers.convolution2d(
                 out,
                 num_outputs=32,
@@ -133,3 +133,39 @@ def states_to_action(hidden_size):
     """
 
     return lambda *args, **kwargs: _states_to_action(hidden_size, *args, **kwargs)
+
+
+def _state_action_to_phi_tp1_loss(hidden_size, output_size, phi_t, phi_tp1,
+                                  a_t):
+    inpt = tf.concat([phi_t, a_t], 1)
+
+    forward_hidden = layers.fully_connected(
+        inpt, num_outputs=hidden_size, activation_fn=tf.nn.elu
+    )
+    phi_tp1_pred = layers.fully_connected(
+        forward_hidden, num_outputs=output_size
+    )
+
+    phi_tp1_error = phi_tp1_pred - phi_tp1
+    phi_tp1_loss = tf.nn.l2_loss(phi_tp1_error)
+
+    return phi_tp1_loss
+
+
+def state_action_to_phi_tp1_loss(hidden_size, output_size):
+    """This model takes as input the current observation and chosen action
+    and returns the predicted next observation latent features (phi_tp1).
+
+    Parameters
+    ----------
+    hidden_size: int
+        size of the hidden layer
+
+    Returns
+    -------
+    phi_tp1_loss_func: function
+        function that returns one-hot prediction op for the action just
+        executed.
+    """
+
+    return lambda *args, **kwargs: _state_action_to_phi_tp1_loss(hidden_size, output_size, *args, **kwargs)

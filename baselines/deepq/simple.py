@@ -77,6 +77,7 @@ def load(path, num_cpu=16):
 def learn(env,
           q_func,
           inv_act_func=None,
+          phi_tp1_loss_func=None,
           lr=5e-4,
           max_timesteps=100000,
           buffer_size=50000,
@@ -120,6 +121,12 @@ def learn(env,
                 the output of the placeholder for observation at t
             s_tp1: object
                 the output of the placehonder for observation at t+1
+    phi_tp1_loss_func: (tf.Variable, tf.Variable) -> tf.Variable
+        a model generator that takes the following inputs:
+            s_t: object
+                the output of the placeholder for observation at t
+            a_t: object
+                the output of the placeholder for action at t
     lr: float
         learning rate for adam optimizer
     max_timesteps: int
@@ -178,10 +185,11 @@ def learn(env,
     def make_obs_ph(name):
         return U.BatchInput(env.observation_space.shape, name=name)
 
-    act, train, update_target, debug = deepq.build_train(
+    act, int_rew_f, train, update_target, debug = deepq.build_train(
         make_obs_ph=make_obs_ph,
         q_func=q_func,
         inv_act_func=inv_act_func,
+        phi_tp1_loss_func=phi_tp1_loss_func,
         num_actions=env.action_space.n,
         optimizer=tf.train.AdamOptimizer(learning_rate=lr),
         gamma=gamma,
@@ -224,7 +232,14 @@ def learn(env,
                     break
             # Take action and update exploration to the newest value
             action = act(np.array(obs)[None], update_eps=exploration.value(t))[0]
-            new_obs, rew, done, _ = env.step(action)
+            new_obs, extrinsic_reward, done, _ = env.step(action)
+            intrinsic_reward = int_rew_f(
+                np.array(obs)[None],
+                np.array(new_obs)[None],
+                np.array(action)[None]
+            )
+            rew = extrinsic_reward + intrinsic_reward
+
             # Store transition in the replay buffer.
             replay_buffer.add(obs, action, rew, new_obs, float(done))
             obs = new_obs
