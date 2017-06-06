@@ -231,7 +231,8 @@ def learn(env,
                 if callback(locals(), globals()):
                     break
             # Take action and update exploration to the newest value
-            action = act(np.array(obs)[None], update_eps=exploration.value(t))[0]
+            # action = act(np.array(obs)[None], update_eps=exploration.value(t))[0]
+            action = act(np.array(obs)[None])[0]
             new_obs, extrinsic_reward, done, _ = env.step(action)
             intrinsic_reward = int_rew_f(
                 np.array(obs)[None],

@@ -137,10 +137,12 @@ def build_act(make_obs_ph, q_func, num_actions, scope="deepq", reuse=None):
             tf.cond(update_eps_ph >= 0, lambda: update_eps_ph, lambda: eps)
         )
 
-        act = U.function(inputs=[observations_ph, stochastic_ph, update_eps_ph],
-                         outputs=output_actions,
-                         givens={update_eps_ph: -1.0, stochastic_ph: True},
-                         updates=[update_eps_expr])
+        # act = U.function(inputs=[observations_ph, stochastic_ph, update_eps_ph],
+        #                  outputs=output_actions,
+        #                  givens={update_eps_ph: -1.0, stochastic_ph: True},
+        #                  updates=[update_eps_expr])
+        act = U.function(inputs=[observations_ph],
+                         outputs=deterministic_actions)
 
         return act
 
