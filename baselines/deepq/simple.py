@@ -223,6 +223,7 @@ def learn(env,
     update_target()
 
     episode_rewards = [0.0]
+    episode_lengths = [0]
     if curious:
         episode_int_rewards = [0.0]
         episode_ext_rewards = [0.0]
@@ -253,12 +254,14 @@ def learn(env,
             obs = new_obs
 
             episode_rewards[-1] += rew
+            episode_lengths[-1] += 1
             if curious:
                 episode_int_rewards[-1] += intrinsic_reward
                 episode_ext_rewards[-1] += extrinsic_reward
             if done:
                 obs = env.reset()
                 episode_rewards.append(0)
+                episode_lengths.append(0)
                 if curious:
                     episode_int_rewards.append(0)
                     episode_ext_rewards.append(0)
@@ -281,6 +284,7 @@ def learn(env,
                 update_target()
 
             mean_100ep_reward = round(np.mean(episode_rewards[-101:-1]), 1)
+            mean_100ep_length = round(np.mean(episode_lengths[-101:-1]), 1)
             if curious:
                 mean_100ep_ext_reward = round(np.mean(episode_ext_rewards[-101:-1]), 1)
                 mean_100ep_int_reward = round(np.mean(episode_int_rewards[-101:-1]), 1)
@@ -288,6 +292,7 @@ def learn(env,
             if done and print_freq is not None and len(episode_rewards) % print_freq == 0:
                 logger.record_tabular("steps", t)
                 logger.record_tabular("episodes", num_episodes)
+                logger.record_tabular("mean 100 episode length", mean_100ep_length)
                 logger.record_tabular("mean 100 episode reward", mean_100ep_reward)
                 if curious:
                     logger.record_tabular("mean 100 episode intrinsic reward", mean_100ep_int_reward)
