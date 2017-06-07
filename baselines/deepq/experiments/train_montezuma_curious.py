@@ -25,7 +25,7 @@ def main():
         inv_act_func=inv_act_model,
         phi_tp1_loss_func=phi_tp1_loss_model,
         lr=1e-4,
-        max_timesteps=2000000,
+        max_timesteps=10000000,
         buffer_size=10000,
         exploration_fraction=0.1,
         exploration_final_eps=0.01,
