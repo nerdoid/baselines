@@ -211,18 +211,21 @@ def learn(env,
     else:
         replay_buffer = ReplayBuffer(buffer_size)
         beta_schedule = None
-    # # Create the schedule for exploration starting from 1.
-    # exploration = LinearSchedule(schedule_timesteps=int(exploration_fraction * max_timesteps),
-    #                              initial_p=1.0,
-    #                              final_p=exploration_final_eps)
+    # Create the schedule for exploration starting from 1.
+    exploration = LinearSchedule(schedule_timesteps=int(exploration_fraction * max_timesteps),
+                                 initial_p=1.0,
+                                 final_p=exploration_final_eps)
+
+    curious = True if inv_act_func and phi_tp1_loss_func else False
 
     # Initialize the parameters and copy them to the target network.
     U.initialize()
     update_target()
 
     episode_rewards = [0.0]
-    episode_int_rewards = [0.0]
-    episode_ext_rewards = [0.0]
+    if curious:
+        episode_int_rewards = [0.0]
+        episode_ext_rewards = [0.0]
     saved_mean_reward = None
     obs = env.reset()
     with tempfile.TemporaryDirectory() as td:
@@ -233,28 +236,32 @@ def learn(env,
                 if callback(locals(), globals()):
                     break
             # Take action and update exploration to the newest value
-            # action = act(np.array(obs)[None], update_eps=exploration.value(t))[0]
-            action = act(np.array(obs)[None])[0]
+            action = act(np.array(obs)[None], update_eps=exploration.value(t))[0]
             new_obs, extrinsic_reward, done, _ = env.step(action)
-            intrinsic_reward = int_rew_f(
-                np.array(obs)[None],
-                np.array(new_obs)[None],
-                np.array(action)[None]
-            )
-            rew = extrinsic_reward + intrinsic_reward
+            if curious:
+                intrinsic_reward = int_rew_f(
+                    np.array(obs)[None],
+                    np.array(new_obs)[None],
+                    np.array(action)[None]
+                )
+                rew = extrinsic_reward + intrinsic_reward
+            else:
+                rew = extrinsic_reward
 
             # Store transition in the replay buffer.
             replay_buffer.add(obs, action, rew, new_obs, float(done))
             obs = new_obs
 
             episode_rewards[-1] += rew
-            episode_int_rewards[-1] += intrinsic_reward
-            episode_ext_rewards[-1] += extrinsic_reward
+            if curious:
+                episode_int_rewards[-1] += intrinsic_reward
+                episode_ext_rewards[-1] += extrinsic_reward
             if done:
                 obs = env.reset()
                 episode_rewards.append(0)
-                episode_int_rewards.append(0)
-                episode_ext_rewards.append(0)
+                if curious:
+                    episode_int_rewards.append(0)
+                    episode_ext_rewards.append(0)
 
             if t > learning_starts and t % train_freq == 0:
                 # Minimize the error in Bellman's equation on a batch sampled from replay buffer.
@@ -274,16 +281,18 @@ def learn(env,
                 update_target()
 
             mean_100ep_reward = round(np.mean(episode_rewards[-101:-1]), 1)
-            mean_100ep_ext_reward = round(np.mean(episode_ext_rewards[-101:-1]), 1)
-            mean_100ep_int_reward = round(np.mean(episode_int_rewards[-101:-1]), 1)
+            if curious:
+                mean_100ep_ext_reward = round(np.mean(episode_ext_rewards[-101:-1]), 1)
+                mean_100ep_int_reward = round(np.mean(episode_int_rewards[-101:-1]), 1)
             num_episodes = len(episode_rewards)
             if done and print_freq is not None and len(episode_rewards) % print_freq == 0:
                 logger.record_tabular("steps", t)
                 logger.record_tabular("episodes", num_episodes)
                 logger.record_tabular("mean 100 episode reward", mean_100ep_reward)
-                logger.record_tabular("mean 100 episode intrinsic reward", mean_100ep_int_reward)
-                logger.record_tabular("mean 100 episode extrinsic reward", mean_100ep_ext_reward)
-                # logger.record_tabular("% time spent exploring", int(100 * exploration.value(t)))
+                if curious:
+                    logger.record_tabular("mean 100 episode intrinsic reward", mean_100ep_int_reward)
+                    logger.record_tabular("mean 100 episode extrinsic reward", mean_100ep_ext_reward)
+                logger.record_tabular("% time spent exploring", int(100 * exploration.value(t)))
                 logger.dump_tabular()
 
             if (checkpoint_freq is not None and t > learning_starts and

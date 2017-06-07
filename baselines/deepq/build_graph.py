@@ -137,12 +137,10 @@ def build_act(make_obs_ph, q_func, num_actions, scope="deepq", reuse=None):
             tf.cond(update_eps_ph >= 0, lambda: update_eps_ph, lambda: eps)
         )
 
-        # act = U.function(inputs=[observations_ph, stochastic_ph, update_eps_ph],
-        #                  outputs=output_actions,
-        #                  givens={update_eps_ph: -1.0, stochastic_ph: True},
-        #                  updates=[update_eps_expr])
-        act = U.function(inputs=[observations_ph],
-                         outputs=deterministic_actions)
+        act = U.function(inputs=[observations_ph, stochastic_ph, update_eps_ph],
+                         outputs=output_actions,
+                         givens={update_eps_ph: -1.0, stochastic_ph: True},
+                         updates=[update_eps_expr])
 
         return act
 
@@ -270,7 +268,17 @@ def build_train(make_obs_ph, q_func, inv_act_func, phi_tp1_loss_func,
             intrinsic_reward = 0.001 * phi_tp1_loss
 
             error = weighted_error + 0.8 * inverse_action_loss + 0.2 * phi_tp1_loss
+
+            int_rew_f = U.function(
+                inputs=[
+                    obs_t_input,
+                    obs_tp1_input,
+                    act_t_ph
+                ],
+                outputs=intrinsic_reward
+            )
         else:
+            int_rew_f = None
             error = weighted_error
 
         # compute optimization op (potentially with gradient clipping)
@@ -303,15 +311,6 @@ def build_train(make_obs_ph, q_func, inv_act_func, phi_tp1_loss_func,
             updates=[optimize_expr]
         )
         update_target = U.function([], [], updates=[update_target_expr])
-
-        int_rew_f = U.function(
-            inputs=[
-                obs_t_input,
-                obs_tp1_input,
-                act_t_ph
-            ],
-            outputs=intrinsic_reward
-        )
 
         q_values = U.function([obs_t_input], q_t)
 
