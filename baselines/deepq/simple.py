@@ -85,6 +85,7 @@ def learn(env,
           exploration_fraction=0.1,
           exploration_final_eps=0.02,
           train_freq=1,
+          summary_freq=32,
           batch_size=32,
           print_freq=1,
           checkpoint_freq=10000,
@@ -228,9 +229,9 @@ def learn(env,
     if curious:
         episode_int_rewards = [0.0]
         episode_ext_rewards = [0.0]
-        inverse_action_losses = [0.0]
     saved_mean_reward = None
     obs = env.reset()
+    summary_writer = tf.summary.FileWriter('results/tensorboard')
     with tempfile.TemporaryDirectory() as td:
         model_saved = False
         model_file = os.path.join(td, "model")
@@ -261,13 +262,24 @@ def learn(env,
                 episode_int_rewards[-1] += intrinsic_reward
                 episode_ext_rewards[-1] += extrinsic_reward
             if done or episode_lengths[-1] >= max_episode_steps:
+                info = {}
+                info['deepq_1/episode_length'] = episode_lengths[-1]
+                num_episodes = len(episode_rewards)
+
                 obs = env.reset()
                 episode_rewards.append(0)
                 episode_lengths.append(0)
                 if curious:
+                    info['deepq_1/extrinsic_reward'] = episode_ext_rewards[-1]
+                    info['deepq_1/intrinsic_reward'] = episode_int_rewards[-1]
                     episode_int_rewards.append(0)
                     episode_ext_rewards.append(0)
-                    inverse_action_losses.append(0)
+
+                summary = tf.Summary()
+                for k, v in info.items():
+                    summary.value.add(tag=k, simple_value=float(v))
+                summary_writer.add_summary(summary, num_episodes)
+                summary_writer.flush()
 
             if t > learning_starts and t % train_freq == 0:
                 # Minimize the error in Bellman's equation on a batch sampled from replay buffer.
@@ -277,12 +289,20 @@ def learn(env,
                 else:
                     obses_t, actions, rewards, obses_tp1, dones = replay_buffer.sample(batch_size)
                     weights, batch_idxes = np.ones_like(rewards), None
-                td_errors, inverse_action_loss = train(obses_t, actions, rewards, obses_tp1, dones, np.ones_like(rewards))
+                td_errors, merged = train(
+                    obses_t,
+                    actions,
+                    rewards,
+                    obses_tp1,
+                    dones,
+                    np.ones_like(rewards)
+                )
                 if prioritized_replay:
                     new_priorities = np.abs(td_errors) + prioritized_replay_eps
                     replay_buffer.update_priorities(batch_idxes, new_priorities)
-                if curious:
-                    inverse_action_losses[-1] += inverse_action_loss
+
+                if t % summary_freq == 0:
+                    summary_writer.add_summary(merged, t)
 
             if t > learning_starts and t % target_network_update_freq == 0:
                 # Update target network periodically.
@@ -290,20 +310,12 @@ def learn(env,
 
             mean_100ep_reward = round(np.mean(episode_rewards[-101:-1]), 1)
             mean_100ep_length = round(np.mean(episode_lengths[-101:-1]), 1)
-            if curious:
-                mean_100ep_ext_reward = round(np.mean(episode_ext_rewards[-101:-1]), 1)
-                mean_100ep_int_reward = round(np.mean(episode_int_rewards[-101:-1]), 1)
-                mean_100ep_iv_action_pred = round(np.mean(inverse_action_losses[-101:-1]), 1)
             num_episodes = len(episode_rewards)
             if done and print_freq is not None and len(episode_rewards) % print_freq == 0:
                 logger.record_tabular("steps", t)
                 logger.record_tabular("episodes", num_episodes)
                 logger.record_tabular("mean 100 episode length", mean_100ep_length)
                 logger.record_tabular("mean 100 episode reward", mean_100ep_reward)
-                if curious:
-                    logger.record_tabular("mean 100 ep intrinsic reward", mean_100ep_int_reward)
-                    logger.record_tabular("mean 100 ep extrinsic reward", mean_100ep_ext_reward)
-                    logger.record_tabular("mean 100 ep inv act pred", mean_100ep_iv_action_pred)
                 logger.record_tabular("% time spent exploring", int(100 * exploration.value(t)))
                 logger.dump_tabular()
 

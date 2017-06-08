@@ -277,6 +277,11 @@ def build_train(make_obs_ph, q_func, inv_act_func, phi_tp1_loss_func,
                 ],
                 outputs=intrinsic_reward
             )
+
+            tf.summary.scalar(
+                'inverse_action_loss',
+                inverse_action_loss
+            )
         else:
             inverse_action_loss = None
             int_rew_f = None
@@ -298,6 +303,7 @@ def build_train(make_obs_ph, q_func, inv_act_func, phi_tp1_loss_func,
             update_target_expr.append(var_target.assign(var))
         update_target_expr = tf.group(*update_target_expr)
 
+        merged = tf.summary.merge_all()
         # Create callable functions
         train = U.function(
             inputs=[
@@ -308,7 +314,7 @@ def build_train(make_obs_ph, q_func, inv_act_func, phi_tp1_loss_func,
                 done_mask_ph,
                 importance_weights_ph
             ],
-            outputs=[td_error, inverse_action_loss],
+            outputs=[td_error, merged],
             updates=[optimize_expr]
         )
         update_target = U.function([], [], updates=[update_target_expr])
