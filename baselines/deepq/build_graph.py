@@ -278,17 +278,18 @@ def build_train(make_obs_ph, q_func, inv_act_func, phi_tp1_loss_func,
                 outputs=intrinsic_reward
             )
         else:
+            inverse_action_loss = None
             int_rew_f = None
             error = weighted_error
 
         # compute optimization op (potentially with gradient clipping)
         if grad_norm_clipping is not None:
             optimize_expr = U.minimize_and_clip(optimizer,
-                                                weighted_error,
+                                                error,
                                                 var_list=q_func_vars,
                                                 clip_val=grad_norm_clipping)
         else:
-            optimize_expr = optimizer.minimize(weighted_error, var_list=q_func_vars)
+            optimize_expr = optimizer.minimize(error, var_list=q_func_vars)
 
         # update_target_fn will be called periodically to copy Q network to target Q network
         update_target_expr = []
@@ -307,7 +308,7 @@ def build_train(make_obs_ph, q_func, inv_act_func, phi_tp1_loss_func,
                 done_mask_ph,
                 importance_weights_ph
             ],
-            outputs=td_error,
+            outputs=[td_error, inverse_action_loss],
             updates=[optimize_expr]
         )
         update_target = U.function([], [], updates=[update_target_expr])
