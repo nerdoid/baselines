@@ -37,7 +37,46 @@ def _cnn_to_mlp(convs, hiddens, dueling, inpt, num_actions, scope, reuse=False):
                                            kernel_size=kernel_size,
                                            stride=stride,
                                            activation_fn=tf.nn.relu)
+        # out = layers.flatten(out)
+        # Instead of flattening the convnet outputs, iterate over their
+        # "objects" (columns through filters) to find relations.
+        _, width, height, _ = out.shape
+        relations = []
+        reuse = False
+        for x in range(width):
+            for y in range(height):
+                if x != y:
+                    with tf.variable_scope("relational/g", reuse=reuse):
+                        layer = out[:, x, y, :]
+                        for l in range(4):
+                            layer = layers.fully_connected(
+                                layer,
+                                num_outputs=256,
+                                activation_fn=tf.nn.relu
+                            )
+                        relations.append(layer)
+                    reuse = True
+
+        relation_sum = tf.add_n(relations)
+
+        with tf.variable_scope("relational/f"):
+            layer = layers.fully_connected(
+                relation_sum,
+                num_outputs=256,
+                activation_fn=tf.nn.relu
+            )
+            layer = layers.fully_connected(
+                layer,
+                num_outputs=256,
+                activation_fn=tf.nn.relu
+            )
+            layer = layers.dropout(layer)
+
+            relation = layers.fully_connected(layer, num_outputs=29)
+
         out = layers.flatten(out)
+        out = tf.concat([relation, out], 1)
+
         with tf.variable_scope("action_value"):
             action_out = out
             for hidden in hiddens:
@@ -79,4 +118,3 @@ def cnn_to_mlp(convs, hiddens, dueling=False):
     """
 
     return lambda *args, **kwargs: _cnn_to_mlp(convs, hiddens, dueling, *args, **kwargs)
-
