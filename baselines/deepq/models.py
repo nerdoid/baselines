@@ -137,7 +137,7 @@ def states_to_action(hidden_size):
 
 def _state_action_to_phi_tp1_loss(hidden_size, output_size, phi_t, phi_tp1,
                                   a_t):
-    inpt = tf.concat([phi_t, a_t], 1)
+    inpt = tf.concat([tf.stop_gradient(phi_t), a_t], 1)
 
     forward_hidden = layers.fully_connected(
         inpt, num_outputs=hidden_size, activation_fn=tf.nn.elu
