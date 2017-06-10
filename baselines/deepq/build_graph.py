@@ -287,6 +287,11 @@ def build_train(make_obs_ph, q_func, inv_act_func, phi_tp1_loss_func,
             int_rew_f = None
             error = weighted_error
 
+        tf.summary.scalar(
+            'loss',
+            error
+        )
+
         # compute optimization op (potentially with gradient clipping)
         if grad_norm_clipping is not None:
             optimize_expr = U.minimize_and_clip(optimizer,
