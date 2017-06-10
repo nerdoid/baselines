@@ -267,7 +267,7 @@ def build_train(make_obs_ph, q_func, inv_act_func, phi_tp1_loss_func,
             phi_tp1_loss = phi_tp1_loss_func(phi_t, phi_tp1, one_hot_actions)
             intrinsic_reward = 0.001 * phi_tp1_loss
 
-            error = weighted_error + 0.8 * inverse_action_loss + 0.2 * phi_tp1_loss
+            error = 0.1 * weighted_error + 0.8 * inverse_action_loss + 0.2 * phi_tp1_loss
 
             int_rew_f = U.function(
                 inputs=[
