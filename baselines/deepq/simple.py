@@ -274,6 +274,8 @@ def learn(env,
                     info['deepq_1/intrinsic_reward'] = episode_int_rewards[-1]
                     episode_int_rewards.append(0)
                     episode_ext_rewards.append(0)
+                else:
+                    info['deepq_1/reward'] = episode_rewards[-1]
 
                 summary = tf.Summary()
                 for k, v in info.items():
