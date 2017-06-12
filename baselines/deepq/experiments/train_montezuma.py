@@ -18,7 +18,6 @@ def main():
         q_func=model,
         lr=1e-4,
         max_timesteps=10000000,
-        max_episode_steps=100000,
         buffer_size=10000,
         exploration_fraction=0.1,
         exploration_final_eps=0.01,
@@ -28,7 +27,7 @@ def main():
         gamma=0.99,
         prioritized_replay=True
     )
-    act.save("pong_model_icm.pkl")
+    act.save("montezuma_model.pkl")
     env.close()
 
 

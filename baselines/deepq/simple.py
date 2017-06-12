@@ -80,7 +80,6 @@ def learn(env,
           phi_tp1_loss_func=None,
           lr=5e-4,
           max_timesteps=100000,
-          max_episode_steps=50000,
           buffer_size=50000,
           exploration_fraction=0.1,
           exploration_final_eps=0.02,
@@ -261,7 +260,7 @@ def learn(env,
             if curious:
                 episode_int_rewards[-1] += intrinsic_reward
                 episode_ext_rewards[-1] += extrinsic_reward
-            if done or episode_lengths[-1] >= max_episode_steps:
+            if done:
                 info = {}
                 info['deepq_1/episode_length'] = episode_lengths[-1]
                 num_episodes = len(episode_rewards)
